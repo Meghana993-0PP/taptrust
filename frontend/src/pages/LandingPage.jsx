@@ -233,11 +233,6 @@ function AuthModal({ tab, setTab, close, onLogin }) {
                 ))}
               </div>
             </div>
-            {role === 'Provider' && (
-              <div style={{ marginBottom: 16, background: '#e8f8f6', borderRadius: 10, padding: '12px', fontSize: 13, color: C.gray, lineHeight: 1.5 }}>
-                ✅ You can complete your provider profile (service category, pricing, availability) after registration from your dashboard.
-              </div>
-            )}
             <SubmitBtn loading={loading} label="Create Account →" />
           </form>
         )}
