@@ -259,7 +259,7 @@ function Earnings() {
   const [data, setData] = useState({ total: 0, jobs: 0, avg: 0, history: [] });
 
   useEffect(() => {
-    fetch(`/api/v1/providers/earnings?period=${period}`, { headers: authHeaders() })
+    fetch(apiUrl(`/providers/earnings?period=${period}`), { headers: authHeaders() })
       .then(r => r.json()).then(d => { if (d?.data) setData(d.data); }).catch(() => {});
   }, [period]);
 
@@ -305,7 +305,7 @@ function Payments() {
   const [withdrawMsg, setWithdrawMsg] = useState('');
 
   useEffect(() => {
-    fetch('/api/v1/payments', { headers: authHeaders() })
+    fetch(apiUrl('/payments'), { headers: authHeaders() })
       .then(r => r.json()).then(d => setPayments(d?.data?.payments || d?.data || []))
       .catch(() => {}).finally(() => setLoading(false));
   }, []);
@@ -313,7 +313,7 @@ function Payments() {
   async function requestWithdraw() {
     if (!withdrawAmt || isNaN(withdrawAmt)) { setWithdrawMsg('Enter a valid amount'); return; }
     try {
-      const res = await fetch('/api/v1/payments/withdraw', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ amount: Number(withdrawAmt) }) });
+      const res = await fetch(apiUrl('/payments/withdraw'), { method: 'POST', headers: authHeaders(), body: JSON.stringify({ amount: Number(withdrawAmt) }) });
       const d = await res.json();
       setWithdrawMsg(res.ok ? '✅ Withdrawal request submitted!' : d.message || 'Failed');
       setWithdrawAmt('');
@@ -376,7 +376,7 @@ function Settings({ user }) {
   const timeSlots = ['08:00-10:00', '10:00-12:00', '12:00-14:00', '14:00-16:00', '16:00-18:00', '18:00-20:00'];
 
   useEffect(() => {
-    fetch('/api/v1/providers/profile', { headers: authHeaders() })
+    fetch(apiUrl('/providers/profile'), { headers: authHeaders() })
       .then(r => r.json())
       .then(d => {
         if (d?.data) {
@@ -392,7 +392,7 @@ function Settings({ user }) {
 
   async function saveSettings() {
     try {
-      const res = await fetch('/api/v1/providers/profile', {
+      const res = await fetch(apiUrl('/providers/profile'), {
         method: 'PATCH',
         headers: authHeaders(),
         body: JSON.stringify({ hourly_rate: Number(pricing) }),
@@ -474,7 +474,7 @@ function Notifications() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/v1/notifications', { headers: authHeaders() })
+    fetch(apiUrl('/notifications'), { headers: authHeaders() })
       .then(r => r.json()).then(d => setNotifs(d?.data?.notifications || d?.data || []))
       .catch(() => {}).finally(() => setLoading(false));
   }, []);
