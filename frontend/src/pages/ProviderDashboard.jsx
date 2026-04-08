@@ -365,6 +365,8 @@ function Payments() {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 function Settings({ user }) {
+  const [profile, setProfile] = useState(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [location, setLocation] = useState('');
   const [pricing, setPricing] = useState('');
   const [slots, setSlots] = useState([]);
@@ -372,13 +374,33 @@ function Settings({ user }) {
 
   const timeSlots = ['08:00-10:00', '10:00-12:00', '12:00-14:00', '14:00-16:00', '16:00-18:00', '18:00-20:00'];
 
+  useEffect(() => {
+    fetch('/api/v1/providers/profile', { headers: authHeaders() })
+      .then(r => r.json())
+      .then(d => {
+        if (d?.data) {
+          setProfile(d.data);
+          setPricing(d.data.hourly_rate ? String(d.data.hourly_rate) : '');
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingProfile(false));
+  }, []);
+
   function toggleSlot(s) { setSlots(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]); }
 
   async function saveSettings() {
     try {
-      await fetch('/api/v1/providers/settings', { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ location, pricing: Number(pricing), available_slots: slots }) });
+      const res = await fetch('/api/v1/providers/profile', {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ hourly_rate: Number(pricing) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Failed to save');
+      if (data?.data) setProfile(data.data);
       setMsg('✅ Settings saved!');
-    } catch { setMsg('Failed to save'); }
+    } catch (err) { setMsg(err.message || 'Failed to save'); }
     setTimeout(() => setMsg(''), 3000);
   }
 
@@ -386,6 +408,37 @@ function Settings({ user }) {
     <div>
       <SectionTitle title="Settings" sub="Configure your working preferences and availability." />
       <div style={{ display: 'grid', gap: 24 }}>
+        <Card style={{ background: 'linear-gradient(135deg, #effaf8, #ffffff)', border: '1px solid #d9efeb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 18, color: C.text }}>🧑‍🔧 Provider Profile</div>
+              <div style={{ fontSize: 13, color: C.gray, marginTop: 4 }}>Your visible service details are shown here for quick reference.</div>
+            </div>
+            {profile?.verification_status && <Badge label={profile.verification_status} color={profile.verification_status === 'Verified' ? 'green' : 'yellow'} />}
+          </div>
+          {loadingProfile ? (
+            <div style={{ fontSize: 14, color: C.gray }}>Loading profile details…</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+              <div style={{ background: C.white, borderRadius: 14, padding: '16px 18px', border: '1px solid #e2f1ee' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: C.gray, marginBottom: 6 }}>SERVICE CATEGORY</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{profile?.service_category || 'Not set yet'}</div>
+              </div>
+              <div style={{ background: C.white, borderRadius: 14, padding: '16px 18px', border: '1px solid #e2f1ee' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: C.gray, marginBottom: 6 }}>EXPERIENCE</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>
+                  {profile?.years_experience !== undefined && profile?.years_experience !== null
+                    ? `${profile.years_experience} year${Number(profile.years_experience) === 1 ? '' : 's'}`
+                    : 'Not set yet'}
+                </div>
+              </div>
+              <div style={{ background: C.white, borderRadius: 14, padding: '16px 18px', border: '1px solid #e2f1ee' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: C.gray, marginBottom: 6 }}>CURRENT HOURLY RATE</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.primary }}>{profile?.hourly_rate ? `₹${profile.hourly_rate}/hr` : 'Not set yet'}</div>
+              </div>
+            </div>
+          )}
+        </Card>
         <Card>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>📍 Working Location</div>
           <input value={location} onChange={e => setLocation(e.target.value)} placeholder="Enter your service area (e.g. Hyderabad, Telangana)"
@@ -394,6 +447,7 @@ function Settings({ user }) {
         </Card>
         <Card>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>💰 Set Pricing (₹/hr)</div>
+          <div style={{ fontSize: 13, color: C.gray, marginBottom: 12 }}>Update your hourly rate here. This uses the same pricing field already present in the dashboard.</div>
           <input type="number" value={pricing} onChange={e => setPricing(e.target.value)} placeholder="e.g. 350"
             style={{ width: '100%', padding: '12px 16px', border: '1.5px solid #d4eeeb', borderRadius: 10, fontSize: 15, outline: 'none', boxSizing: 'border-box' }}
             onFocus={e => e.target.style.borderColor = C.primary} onBlur={e => e.target.style.borderColor = '#d4eeeb'} />
