@@ -43,6 +43,37 @@ async function uploadDocument(userId, file) {
 }
 
 /**
+ * Return the authenticated provider's own profile.
+ *
+ * @param {number} userId - req.user.userId (from JWT)
+ * @returns {Promise<object>}
+ */
+async function getOwnProfile(userId) {
+  const professional = await providerModel.findByUserId(userId);
+  if (!professional) {
+    throw new AppError('Provider profile not found.', 404);
+  }
+
+  const provider = await providerModel.findById(professional.id);
+  if (!provider) {
+    throw new AppError('Provider profile not found.', 404);
+  }
+
+  return {
+    id: provider.id,
+    name: provider.name,
+    service_category: provider.service_category,
+    years_experience: provider.years_experience,
+    hourly_rate: provider.hourly_rate,
+    bio: provider.bio || null,
+    skills: provider.skills || null,
+    average_rating: provider.average_rating,
+    total_reviews: provider.total_reviews,
+    verification_status: provider.verification_status,
+  };
+}
+
+/**
  * Return the public profile for a provider.
  *
  * @param {number} providerId  - Professionals.id
@@ -211,6 +242,7 @@ async function assertProviderVerified(userId) {
 
 module.exports = {
   uploadDocument,
+  getOwnProfile,
   getPublicProfile,
   updateProfile,
   assertProviderVerified,
