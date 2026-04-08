@@ -12,6 +12,15 @@ const C = {
   white: '#fff',
 };
 
+const PROVIDER_CATEGORIES = [
+  'Plumbing',
+  'Electrical',
+  'Cleaning',
+  'Painting',
+  'Carpentry',
+  'General Construction',
+];
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 function getUser() {
   try {
@@ -163,10 +172,23 @@ function AuthModal({ tab, setTab, close, onLogin }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('Customer');
+  const [serviceCategory, setServiceCategory] = useState(PROVIDER_CATEGORIES[0]);
+  const [yearsExperience, setYearsExperience] = useState('');
+  const [hourlyRate, setHourlyRate] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { setError(''); setEmail(''); setPassword(''); setName(''); setPhone(''); }, [tab]);
+  useEffect(() => {
+    setError('');
+    setEmail('');
+    setPassword('');
+    setName('');
+    setPhone('');
+    setRole('Customer');
+    setServiceCategory(PROVIDER_CATEGORIES[0]);
+    setYearsExperience('');
+    setHourlyRate('');
+  }, [tab]);
 
   async function handleSignIn(e) {
     e.preventDefault(); setError('');
@@ -189,9 +211,25 @@ function AuthModal({ tab, setTab, close, onLogin }) {
   async function handleSignUp(e) {
     e.preventDefault(); setError('');
     if (!name || !email || !password || !phone) { setError('Please fill all fields.'); return; }
+    if (role === 'Provider' && (!serviceCategory || yearsExperience === '' || hourlyRate === '')) {
+      setError('Please complete your provider profile details.');
+      return;
+    }
     setLoading(true);
     try {
-      const res = await fetch(apiUrl('/auth/register'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email, password, phone, role }) });
+      const payload = {
+        name,
+        email,
+        password,
+        phone,
+        role,
+        ...(role === 'Provider' ? {
+          service_category: serviceCategory,
+          years_experience: Number(yearsExperience),
+          hourly_rate: Number(hourlyRate),
+        } : {}),
+      };
+      const res = await fetch(apiUrl('/auth/register'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Registration failed.');
       setTab('signin');
@@ -233,6 +271,39 @@ function AuthModal({ tab, setTab, close, onLogin }) {
                 ))}
               </div>
             </div>
+            {role === 'Provider' && (
+              <div style={{ marginBottom: 20, background: 'linear-gradient(160deg, #f8fffe, #e6f7f4 60%, #dbf1ed)', border: '1px solid #b7e3dd', borderRadius: 20, padding: '18px 16px 16px', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)' }}>
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: C.text }}>Provider Profile</div>
+                  <div style={{ fontSize: 13, color: C.gray, marginTop: 3 }}>A few quick details to help customers trust your profile faster.</div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                  {['Verified category', 'Visible experience', 'Starter pricing'].map(item => (
+                    <span key={item} style={{ padding: '7px 10px', borderRadius: 999, background: C.white, border: '1px solid #cdeae5', fontSize: 12, fontWeight: 700, color: C.gray }}>{item}</span>
+                  ))}
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: C.gray, display: 'block', marginBottom: 6 }}>SERVICE CATEGORY</label>
+                  <div style={{ position: 'relative', background: C.white, border: '1.5px solid #cfeae6', borderRadius: 14, boxShadow: '0 8px 20px rgba(42,157,143,0.06)' }}>
+                    <select
+                      value={serviceCategory}
+                      onChange={e => setServiceCategory(e.target.value)}
+                      style={{ width: '100%', padding: '14px 48px 14px 42px', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 600, outline: 'none', boxSizing: 'border-box', background: 'transparent', color: C.text, appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', cursor: 'pointer' }}
+                    >
+                      {PROVIDER_CATEGORIES.map(category => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                    <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 15, pointerEvents: 'none' }}>🛠️</span>
+                    <span style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', color: C.primaryDark, fontSize: 12, pointerEvents: 'none' }}>▼</span>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <Field label="YEARS OF EXPERIENCE" placeholder="e.g. 3" type="number" value={yearsExperience} onChange={setYearsExperience} />
+                  <Field label="HOURLY RATE (INR)" placeholder="e.g. 500" type="number" value={hourlyRate} onChange={setHourlyRate} />
+                </div>
+              </div>
+            )}
             <SubmitBtn loading={loading} label="Create Account →" />
           </form>
         )}
