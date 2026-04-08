@@ -19,6 +19,15 @@ router.post(
   providerController.uploadDocument
 );
 
+// ── GET /api/v1/providers/profile ────────────────────────────────────────────
+// Provider only
+router.get(
+  '/profile',
+  authenticate,
+  authorize('Provider'),
+  providerController.getOwnProfile
+);
+
 // ── PATCH /api/v1/providers/profile ──────────────────────────────────────────
 // Provider only
 router.patch(
