@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { apiUrl } from '../services/apiBase';
 
 const C = {
   primary: '#2a9d8f', primaryDark: '#1f7a6e', accent: '#e9c46a',
@@ -112,7 +113,7 @@ function Badge({ label, color }) {
 function Overview({ user }) {
   const [stats, setStats] = useState({ total_bookings: 0, completed: 0, pending: 0, total_earnings: 0, avg_rating: 0, total_reviews: 0 });
   useEffect(() => {
-    fetch('/api/v1/providers/stats', { headers: authHeaders() })
+    fetch(apiUrl('/providers/stats'), { headers: authHeaders() })
       .then(r => r.json()).then(d => { if (d?.data) setStats(d.data); }).catch(() => {});
   }, []);
 
@@ -166,13 +167,13 @@ function Requests() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/v1/bookings?status=pending', { headers: authHeaders() })
+    fetch(apiUrl('/bookings?status=pending'), { headers: authHeaders() })
       .then(r => r.json()).then(d => setRequests(d?.data?.bookings || d?.data || []))
       .catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   async function respond(id, action) {
-    await fetch(`/api/v1/bookings/${id}/${action}`, { method: 'PUT', headers: authHeaders() }).catch(() => {});
+    await fetch(apiUrl(`/bookings/${id}/${action}`), { method: 'PUT', headers: authHeaders() }).catch(() => {});
     setRequests(r => r.filter(b => b.id !== id));
   }
 
@@ -208,13 +209,13 @@ function ActiveJobs() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/v1/bookings?status=confirmed', { headers: authHeaders() })
+    fetch(apiUrl('/bookings?status=confirmed'), { headers: authHeaders() })
       .then(r => r.json()).then(d => setJobs(d?.data?.bookings || d?.data || []))
       .catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   async function updateStatus(id, status) {
-    await fetch(`/api/v1/bookings/${id}/status`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status }) }).catch(() => {});
+    await fetch(apiUrl(`/bookings/${id}/status`), { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status }) }).catch(() => {});
     setJobs(j => j.map(b => b.id === id ? { ...b, status } : b));
   }
 
