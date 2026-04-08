@@ -25,6 +25,23 @@ async function uploadDocument(req, res, next) {
 }
 
 /**
+ * GET /api/v1/providers/profile
+ * Requires: authenticate + authorize('Provider')
+ */
+async function getOwnProfile(req, res, next) {
+  try {
+    const profile = await providerService.getOwnProfile(req.user.userId);
+    return res.status(200).json({
+      success: true,
+      data: profile,
+      message: 'Provider profile retrieved.',
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
  * GET /api/v1/providers/:id
  * Public — no authentication required.
  */
@@ -76,4 +93,4 @@ async function searchProviders(req, res, next) {
   }
 }
 
-module.exports = { uploadDocument, getPublicProfile, updateProfile, searchProviders };
+module.exports = { uploadDocument, getOwnProfile, getPublicProfile, updateProfile, searchProviders };
