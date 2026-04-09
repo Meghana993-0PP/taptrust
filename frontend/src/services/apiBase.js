@@ -16,5 +16,6 @@ export async function apiFetch(path, opts = {}) {
     ...opts.headers,
   };
   const res = await fetch(apiUrl(path), { ...opts, headers });
-  return res.json();
+  const text = await res.text();
+  try { return text ? JSON.parse(text) : {}; } catch { return {}; }
 }
