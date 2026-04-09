@@ -9,8 +9,11 @@
 
 import axios from 'axios';
 
+const FALLBACK_PRODUCTION_API_URL = 'https://taptrust-production.up.railway.app';
+const BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? FALLBACK_PRODUCTION_API_URL : '');
+
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: `${BASE}/api/v1`,
   headers: {
     'Content-Type': 'application/json',
   },
