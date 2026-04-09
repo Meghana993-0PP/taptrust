@@ -82,15 +82,22 @@ async function updateProfile(req, res, next) {
  */
 async function searchProviders(req, res, next) {
   try {
-    const { providers, message } = await providerService.searchProviders(req.query);
+    console.log("➡️ Hit searchProviders");
+
+    const result = await providerService.searchProviders(req.query);
+
+    console.log("✅ Service returned");
+
+    const { providers, message } = result;
+
     return res.status(200).json({
       success: true,
       data: providers,
       message,
     });
   } catch (err) {
+    console.error("❌ ERROR in searchProviders:", err);
     return next(err);
   }
 }
-
 module.exports = { uploadDocument, getOwnProfile, getPublicProfile, updateProfile, searchProviders };
