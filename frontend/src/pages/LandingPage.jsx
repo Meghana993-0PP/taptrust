@@ -195,8 +195,18 @@ function AuthModal({ tab, setTab, close, onLogin }) {
     if (!email || !password) { setError('Please enter email and password.'); return; }
     setLoading(true);
     try {
+      console.log('[Auth] login request', {
+        url: apiUrl('/auth/login'),
+        email,
+      });
       const res = await fetch(apiUrl('/auth/login'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
       const data = await res.json();
+      console.log('[Auth] login response', {
+        url: apiUrl('/auth/login'),
+        status: res.status,
+        ok: res.ok,
+        response: data,
+      });
       if (!res.ok) throw new Error(data.message || 'Invalid credentials.');
       const token = data?.data?.token;
       if (!token) throw new Error('No token received');
@@ -229,8 +239,21 @@ function AuthModal({ tab, setTab, close, onLogin }) {
           hourly_rate: Number(hourlyRate),
         } : {}),
       };
+      console.log('[Auth] signup request', {
+        url: apiUrl('/auth/register'),
+        payload: {
+          ...payload,
+          password: '[redacted]',
+        },
+      });
       const res = await fetch(apiUrl('/auth/register'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await res.json();
+      console.log('[Auth] signup response', {
+        url: apiUrl('/auth/register'),
+        status: res.status,
+        ok: res.ok,
+        response: data,
+      });
       if (!res.ok) throw new Error(data.message || 'Registration failed.');
       setTab('signin');
     } catch (err) { setError(err.message); } finally { setLoading(false); }
