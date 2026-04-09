@@ -30,28 +30,9 @@ const notificationRoutes = require('./routes/notifications');
 const adminRoutes = require('./routes/admin');
 
 const app = express();
-const allowedOrigins = new Set([
-  process.env.FRONTEND_URL,
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'https://taptrust.vercel.app',
-]);
-const corsOptions = {
-  origin(origin, cb) {
-    if (!origin) return cb(null, true);
-    if (allowedOrigins.has(origin) || origin.endsWith('.vercel.app')) {
-      return cb(null, true);
-    }
-    return cb(null, false);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 200,
-};
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
-app.use(cors(corsOptions));
+app.use(cors());
 
 // ── API request logging ──────────────────────────────────────────────────────
 app.use('/api', (req, res, next) => {
@@ -77,9 +58,6 @@ app.use(express.urlencoded({ extended: true }));
 
 // ── Static file serving (uploaded documents) ─────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-
-// ── Preflight handling ────────────────────────────────────────────────────────
-app.options('/api/*', cors(corsOptions));
 
 // ── Rate limiting (applied to all /api routes) ────────────────────────────────
 app.use('/api', rateLimiter);
