@@ -1,6 +1,8 @@
 // In development: Vite proxies /api → localhost:5000
-// In production: calls VITE_API_URL directly
-const BASE = import.meta.env.VITE_API_URL || '';
+// In production: prefer VITE_API_URL, with a Railway fallback if the env var
+// is missing in the deployed build.
+const FALLBACK_PRODUCTION_API_URL = 'https://taptrust-production.up.railway.app';
+const BASE = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? FALLBACK_PRODUCTION_API_URL : '');
 
 export function apiUrl(path) {
   return `${BASE}/api/v1${path}`;
