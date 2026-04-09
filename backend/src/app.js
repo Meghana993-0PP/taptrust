@@ -30,8 +30,20 @@ const notificationRoutes = require('./routes/notifications');
 const adminRoutes = require('./routes/admin');
 
 const app = express();
+const allowedOrigins = new Set([
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://taptrust.vercel.app',
+]);
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin(origin, cb) {
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.has(origin) || origin.endsWith('.vercel.app')) {
+      return cb(null, true);
+    }
+    return cb(null, false);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -40,6 +52,24 @@ const corsOptions = {
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 app.use(cors(corsOptions));
+
+// ── API request logging ──────────────────────────────────────────────────────
+app.use('/api', (req, res, next) => {
+  const startedAt = Date.now();
+  console.log('[API]', req.method, req.originalUrl, {
+    origin: req.headers.origin || null,
+    referer: req.headers.referer || null,
+  });
+
+  res.on('finish', () => {
+    console.log('[API]', req.method, req.originalUrl, {
+      status: res.statusCode,
+      duration_ms: Date.now() - startedAt,
+    });
+  });
+
+  next();
+});
 
 // ── Body parsing ──────────────────────────────────────────────────────────────
 app.use(express.json());
