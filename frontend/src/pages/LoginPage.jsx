@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { apiUrl } from '../services/apiBase';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -14,12 +15,22 @@ export default function LoginPage() {
     if (!email || !password) { setError('Please enter your email and password.'); return; }
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/auth/login', {
+      console.log('[Auth] login request', {
+        url: apiUrl('/auth/login'),
+        email,
+      });
+      const res = await fetch(apiUrl('/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
+      console.log('[Auth] login response', {
+        url: apiUrl('/auth/login'),
+        status: res.status,
+        ok: res.ok,
+        response: data,
+      });
       if (!res.ok) throw new Error(data.message || 'Invalid email or password.');
       const token = data?.data?.token;
       if (!token) throw new Error('No token received');
