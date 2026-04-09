@@ -30,14 +30,16 @@ const notificationRoutes = require('./routes/notifications');
 const adminRoutes = require('./routes/admin');
 
 const app = express();
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 200,
+};
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
-app.use(
-  cors({
-    origin: true, // Allow all origins in development
-    credentials: true,
-  })
-);
+app.use(cors(corsOptions));
 
 // ── Body parsing ──────────────────────────────────────────────────────────────
 app.use(express.json());
@@ -45,6 +47,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // ── Static file serving (uploaded documents) ─────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// ── Preflight handling ────────────────────────────────────────────────────────
+app.options('/api/*', cors(corsOptions));
 
 // ── Rate limiting (applied to all /api routes) ────────────────────────────────
 app.use('/api', rateLimiter);
