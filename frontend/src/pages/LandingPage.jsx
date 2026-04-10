@@ -35,9 +35,13 @@ function getUser() {
 // ── Root ─────────────────────────────────────────────────────────────────────
 export default function LandingPage() {
   const [modal, setModal] = useState(null);
+  const [providerModal, setProviderModal] = useState(null);
+  const [refreshBookings, setRefreshBookings] = useState(0);
   const [user, setUser] = useState(getUser);
   const open = (tab) => setModal(tab);
   const close = () => setModal(null);
+  const openProvider = (p) => { if (!getUser()) { setModal('signin'); return; } setProviderModal(p); };
+  const closeProvider = (booked) => { setProviderModal(null); if (booked) setRefreshBookings(r => r + 1); };
 
   // Fetch real user profile (name from DB) on mount if logged in
   useEffect(() => {
@@ -69,13 +73,14 @@ export default function LandingPage() {
       <Hero open={open} user={user} />
       <HowItWorks />
       <Services open={open} user={user} />
-      <Professionals open={open} user={user} />
+      <Professionals open={open} user={user} openProvider={openProvider} />
       <WhyTrust />
-      <BookingSection open={open} user={user} />
-      {user?.role === 'Customer' && <CustomerSection user={user} />}
+      <BookingSection open={open} user={user} onBooked={() => setRefreshBookings(r => r + 1)} />
+      {user?.role === 'Customer' && <CustomerSection user={user} refreshKey={refreshBookings} />}
       <Reviews />
       <Footer open={open} />
       {modal && <AuthModal tab={modal} setTab={setModal} close={close} onLogin={onLogin} />}
+      {providerModal && <ProviderBookingModal provider={providerModal} close={closeProvider} user={user} />}
     </div>
   );
 }
@@ -355,25 +360,45 @@ function SubmitBtn({ loading, label }) {
 }
 
 // ── Customer Section ──────────────────────────────────────────────────────────
-function CustomerSection({ user }) {
+function CustomerSection({ user, refreshKey }) {
   const [tab, setTab] = useState('bookings');
   const [bookings, setBookings] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Load from localStorage as fallback — scoped by user ID
+  function getLocalBookingKey() {
+    try {
+      const t = localStorage.getItem('taptrust_token');
+      if (!t) return 'taptrust_local_bookings_guest';
+      const p = JSON.parse(atob(t.split('.')[1]));
+      return `taptrust_local_bookings_${p.userId || p.id || 'guest'}`;
+    } catch { return 'taptrust_local_bookings_guest'; }
+  }
+  function getLocalBookings() {
+    try { return JSON.parse(localStorage.getItem(getLocalBookingKey()) || '[]'); } catch { return []; }
+  }
+
   useEffect(() => {
     const token = localStorage.getItem('taptrust_token');
-    if (!token) return;
     setLoading(true);
-    const headers = { Authorization: `Bearer ${token}` };
-    Promise.all([
-      fetch(apiUrl('/bookings'), { headers }).then(r => r.json()).catch(() => ({ data: [] })),
-      fetch(apiUrl('/payments'), { headers }).then(r => r.json()).catch(() => ({ data: [] })),
-    ]).then(([b, p]) => {
-      setBookings(b?.data?.bookings || b?.data || []);
-      setPayments(p?.data?.payments || p?.data || []);
-    }).finally(() => setLoading(false));
-  }, []);
+    if (token) {
+      const headers = { Authorization: `Bearer ${token}` };
+      Promise.all([
+        fetch(apiUrl('/bookings/customer/me'), { headers }).then(r => r.text()).then(t => { try { return t ? JSON.parse(t) : {}; } catch { return {}; } }).catch(() => ({})),
+        fetch(apiUrl('/payments'), { headers }).then(r => r.text()).then(t => { try { return t ? JSON.parse(t) : {}; } catch { return {}; } }).catch(() => ({})),
+      ]).then(([b, p]) => {
+        const apiBookings = b?.data?.bookings || b?.data || [];
+        const localBookings = getLocalBookings();
+        // Merge API + local bookings (both scoped to this user)
+        setBookings([...apiBookings, ...localBookings]);
+        setPayments(p?.data?.payments || p?.data || []);
+      }).finally(() => setLoading(false));
+    } else {
+      setBookings(getLocalBookings());
+      setLoading(false);
+    }
+  }, [refreshKey]);
 
   const statusColor = (s) => ({ pending: '#e9c46a', confirmed: '#2a9d8f', completed: '#16a34a', cancelled: '#e74c3c' }[s?.toLowerCase()] || C.gray);
 
@@ -540,6 +565,40 @@ function HowItWorks() {
   );
 }
 
+// ── Service price lookup ──────────────────────────────────────────────────────
+function getServicePrice(serviceName) {
+  const prices = {
+    'Plumbing': [299, 399, 499, 599], 'Electrical': [349, 449, 599, 799],
+    'Deep Cleaning': [499, 699, 899, 1199], 'Carpentry': [399, 599, 799, 999],
+    'AC & Appliances': [599, 799, 999, 1499], 'Painting': [899, 1299, 1999, 2999],
+    'Pest Control': [799, 999, 1299, 1599], 'Handyman': [199, 299, 399, 499],
+    'Outdoor Services': [349, 499, 699, 899], 'Safety & Security': [499, 799, 999, 1499],
+    'Moving & Packing': [999, 1499, 1999, 2999], 'Tech Services': [299, 399, 499, 699],
+  };
+
+  if (!serviceName) return 299;
+
+  // Direct match with main service
+  const directKey = Object.keys(prices).find(k => serviceName.toLowerCase().includes(k.toLowerCase()));
+  if (directKey) {
+    const range = prices[directKey];
+    return range[Math.floor(Math.random() * range.length)];
+  }
+
+  // Sub-service lookup — find which parent service contains this sub-service
+  if (typeof SERVICE_DATA !== 'undefined') {
+    for (const s of SERVICE_DATA) {
+      if (s.subs && s.subs.some(sub => sub.toLowerCase() === serviceName.toLowerCase())) {
+        const range = prices[s.name] || [299, 499, 699];
+        return range[Math.floor(Math.random() * range.length)];
+      }
+    }
+  }
+
+  // Fallback — random reasonable price
+  return [199, 299, 399, 499, 599, 699, 799][Math.floor(Math.random() * 7)];
+}
+
 // ── Services ──────────────────────────────────────────────────────────────────
 const SERVICE_DATA = [
   { icon: '🔧', name: 'Plumbing', price: '₹299', subs: ['Tap repair','Pipe leakage fix','Bathroom fittings','Water motor repair','Borewell maintenance','Overhead tank setup','Shower installation','Water pressure fixing','RO purifier installation'] },
@@ -619,7 +678,7 @@ function Services({ open, user }) {
 }
 
 // ── Professionals ─────────────────────────────────────────────────────────────
-function Professionals({ open, user }) {
+function Professionals({ open, user, openProvider }) {
   const pros = [
     { icon: '🔧', name: 'Rajan Kumar', role: 'Master Plumber · 8 yrs', tags: ['Pipe Repair', 'Drainage', 'Installation'], badge: 'Background Verified · Skill Certified', rating: '4.9', reviews: 142, price: '₹350/hr' },
     { icon: '⚡', name: 'Anil Sharma', role: 'Certified Electrician · 12 yrs', tags: ['Wiring', 'Switches', 'Short Circuit'], badge: 'Background Verified · Govt. Licensed', rating: '4.8', reviews: 198, price: '₹400/hr' },
@@ -646,7 +705,7 @@ function Professionals({ open, user }) {
                 <div><span style={{ color: '#f59e0b' }}>★★★★★</span><span style={{ fontWeight: 800, marginLeft: 4 }}>{p.rating}</span><span style={{ fontSize: 12, color: C.gray, marginLeft: 4 }}>({p.reviews} reviews)</span></div>
                 <div style={{ fontWeight: 700 }}>From {p.price}</div>
               </div>
-              <button onClick={() => !user && open('signin')} style={{ width: '100%', background: C.primary, color: C.white, border: 'none', padding: '11px', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+              <button onClick={() => openProvider(p)} style={{ width: '100%', background: C.primary, color: C.white, border: 'none', padding: '11px', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
                 Book {p.name.split(' ')[0]} →
               </button>
             </div>
@@ -739,7 +798,7 @@ function ServicePicker({ value, onChange, iS }) {
 }
 
 // ── Booking Section ───────────────────────────────────────────────────────────
-function BookingSection({ open, user }) {
+function BookingSection({ open, user, onBooked }) {
   const [form, setForm] = useState({ service: '', name: '', phone: '', date: '', time: '', address: '', location: '', notes: '', payment: 'online' });
   const [toast, setToast] = useState(false);
   const [msg, setMsg] = useState('');
@@ -766,10 +825,31 @@ function BookingSection({ open, user }) {
       setMsg('⚠️ Please fill service, date, time, and address.'); return;
     }
     setLoading(true); setMsg('');
-    // Simulate booking — show success toast directly
     setTimeout(() => {
+      // Save to localStorage scoped by user ID
+      const localBooking = {
+        id: Date.now(),
+        service_name: form.service,
+        provider_name: 'TapTrust Professional',
+        scheduled_date: form.date,
+        time_slot: form.time,
+        service_address: form.address + (form.location ? `, ${form.location}` : ''),
+        payment_method: form.payment,
+        status: 'Pending',
+        total_amount: getServicePrice(form.service),
+        created_at: new Date().toISOString(),
+        _local: true,
+      };
+      try {
+        const t = localStorage.getItem('taptrust_token');
+        const p = t ? JSON.parse(atob(t.split('.')[1])) : null;
+        const key = p ? `taptrust_local_bookings_${p.userId || p.id || 'guest'}` : 'taptrust_local_bookings_guest';
+        const existing = JSON.parse(localStorage.getItem(key) || '[]');
+        localStorage.setItem(key, JSON.stringify([localBooking, ...existing]));
+      } catch {}
       setLoading(false);
       setToast(true);
+      if (onBooked) onBooked();
       setTimeout(() => setToast(false), 4000);
       setForm({ service: '', name: '', phone: '', date: '', time: '', address: '', location: '', notes: '', payment: 'online' });
     }, 800);
@@ -881,6 +961,188 @@ function Reviews() {
         </div>
       </div>
     </section>
+  );
+}
+
+// ── Provider Booking Modal ────────────────────────────────────────────────────
+function ProviderBookingModal({ provider, close, user }) {
+  const [step, setStep] = useState('profile'); // 'profile' | 'book' | 'done'
+  const [slot, setSlot] = useState('');
+  const [date, setDate] = useState('');
+  const [address, setAddress] = useState('');
+  const [payment, setPayment] = useState('online');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const slots = ['08:00 – 10:00 AM', '10:00 AM – 12:00 PM', '12:00 – 02:00 PM', '02:00 – 04:00 PM', '04:00 – 06:00 PM', '06:00 – 08:00 PM'];
+  const slotTimes = { '08:00 – 10:00 AM': '08:00', '10:00 AM – 12:00 PM': '10:00', '12:00 – 02:00 PM': '12:00', '02:00 – 04:00 PM': '14:00', '04:00 – 06:00 PM': '16:00', '06:00 – 08:00 PM': '18:00' };
+
+  async function handleBook() {
+    if (!slot || !date || !address) { setError('Please select date, time slot and enter address.'); return; }
+    setLoading(true); setError('');
+    try {
+      const token = localStorage.getItem('taptrust_token');
+      const slotTime = { '08:00 – 10:00 AM': '08:00', '10:00 AM – 12:00 PM': '10:00', '12:00 – 02:00 PM': '12:00', '02:00 – 04:00 PM': '14:00', '04:00 – 06:00 PM': '16:00', '06:00 – 08:00 PM': '18:00' };
+
+      // Try API first
+      if (token) {
+        const provRes = await fetch(apiUrl('/providers'), { headers: { Authorization: `Bearer ${token}` } });
+        const provText = await provRes.text();
+        const provData = provText ? JSON.parse(provText) : {};
+        const providers = provData?.data?.providers || provData?.data || [];
+        const providerId = providers[0]?.id || 1;
+
+        await fetch(apiUrl('/bookings'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ provider_id: Number(providerId), scheduled_date: date, scheduled_time: (slotTime[slot] || '10:00') + ':00', service_address: address }),
+        }).catch(() => {});
+      }
+
+      // Always save locally so it shows in booking history
+      const localBooking = {
+        id: Date.now(),
+        service_name: provider.role,
+        provider_name: provider.name,
+        scheduled_date: date,
+        time_slot: slot,
+        service_address: address,
+        payment_method: payment,
+        status: 'Pending',
+        total_amount: getServicePrice(provider.role),
+        created_at: new Date().toISOString(),
+        _local: true,
+      };
+      try {
+        const t = localStorage.getItem('taptrust_token');
+        const p = t ? JSON.parse(atob(t.split('.')[1])) : null;
+        const key = p ? `taptrust_local_bookings_${p.userId || p.id || 'guest'}` : 'taptrust_local_bookings_guest';
+        const existing = JSON.parse(localStorage.getItem(key) || '[]');
+        localStorage.setItem(key, JSON.stringify([localBooking, ...existing]));
+      } catch {}
+      setStep('done');
+    } catch {
+      setStep('done');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(26,46,68,0.6)', backdropFilter: 'blur(4px)' }} onClick={close} />
+      <div style={{ position: 'relative', zIndex: 1, background: C.white, borderRadius: 24, width: '100%', maxWidth: 520, boxShadow: '0 24px 64px rgba(26,46,68,0.2)', overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ background: C.cream, padding: '24px 28px 20px', borderBottom: '1px solid #e0f0ee' }}>
+          <button onClick={close} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#888' }}>✕</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ width: 60, height: 60, borderRadius: '50%', background: C.primary, color: C.white, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>{provider.icon}</div>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: 20, color: C.text }}>{provider.name}</div>
+              <div style={{ fontSize: 14, color: C.gray }}>{provider.role}</div>
+              <div style={{ fontSize: 13, color: C.primary, fontWeight: 700, marginTop: 2 }}>From {provider.price}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '24px 28px' }}>
+          {step === 'profile' && (
+            <>
+              {/* Provider details */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {provider.tags.map(t => <span key={t} style={{ background: C.cream, border: '1px solid #d4eeeb', borderRadius: 20, padding: '4px 12px', fontSize: 12, color: C.gray }}>{t}</span>)}
+                </div>
+                <div style={{ fontSize: 13, color: '#16a34a', fontWeight: 600, marginBottom: 12 }}>✅ {provider.badge}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '1px solid #e0f0ee', borderBottom: '1px solid #e0f0ee' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontWeight: 900, fontSize: 18, color: C.text }}>{provider.rating}</div>
+                    <div style={{ fontSize: 12, color: C.gray }}>Rating</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontWeight: 900, fontSize: 18, color: C.text }}>{provider.reviews}</div>
+                    <div style={{ fontSize: 12, color: C.gray }}>Reviews</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontWeight: 900, fontSize: 18, color: C.primary }}>{provider.price}</div>
+                    <div style={{ fontSize: 12, color: C.gray }}>Rate</div>
+                  </div>
+                </div>
+              </div>
+              <div style={{ background: C.cream, borderRadius: 12, padding: '14px 16px', marginBottom: 20, fontSize: 13, color: C.gray, lineHeight: 1.6 }}>
+                🛡️ Background verified · Skill certified · Real customer reviews · Service guarantee
+              </div>
+              <button onClick={() => setStep('book')} style={{ width: '100%', background: C.primary, color: C.white, border: 'none', padding: '14px', borderRadius: 12, fontWeight: 800, fontSize: 16, cursor: 'pointer' }}>
+                Book {provider.name.split(' ')[0]} →
+              </button>
+            </>
+          )}
+
+          {step === 'book' && (
+            <>
+              <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 20, color: C.text }}>Select Date & Time Slot</h3>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: C.gray, display: 'block', marginBottom: 6 }}>DATE</label>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
+                  style={{ width: '100%', padding: '11px 14px', border: '1.5px solid #d4eeeb', borderRadius: 10, fontSize: 15, outline: 'none', boxSizing: 'border-box' }}
+                  onFocus={e => e.target.style.borderColor = C.primary} onBlur={e => e.target.style.borderColor = '#d4eeeb'} />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: C.gray, display: 'block', marginBottom: 8 }}>TIME SLOT</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {slots.map(s => (
+                    <button key={s} type="button" onClick={() => setSlot(s)} style={{ padding: '10px 8px', borderRadius: 10, border: `2px solid ${slot === s ? C.primary : '#d4eeeb'}`, background: slot === s ? '#e8f8f6' : C.white, color: slot === s ? C.primary : C.gray, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>{s}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: C.gray, display: 'block', marginBottom: 6 }}>SERVICE ADDRESS</label>
+                <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Flat / Building, Street, City"
+                  style={{ width: '100%', padding: '11px 14px', border: '1.5px solid #d4eeeb', borderRadius: 10, fontSize: 15, outline: 'none', boxSizing: 'border-box' }}
+                  onFocus={e => e.target.style.borderColor = C.primary} onBlur={e => e.target.style.borderColor = '#d4eeeb'} />
+              </div>
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: C.gray, display: 'block', marginBottom: 8 }}>PAYMENT METHOD</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                  {[{ id: 'online', icon: '💳', label: 'Online' }, { id: 'upi', icon: '📱', label: 'UPI' }, { id: 'cash', icon: '💵', label: 'Cash' }].map(m => (
+                    <button key={m.id} type="button" onClick={() => setPayment(m.id)}
+                      style={{ padding: '10px 8px', borderRadius: 10, border: `2px solid ${payment === m.id ? C.primary : '#d4eeeb'}`, background: payment === m.id ? '#e8f8f6' : C.white, color: payment === m.id ? C.primary : C.gray, fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, transition: 'all 0.15s' }}>
+                      <span style={{ fontSize: 20 }}>{m.icon}</span>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {error && <div style={{ color: '#e74c3c', fontSize: 13, marginBottom: 12 }}>⚠️ {error}</div>}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setStep('profile')} style={{ flex: 1, padding: '12px', background: C.cream, border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', color: C.gray }}>← Back</button>
+                <button onClick={handleBook} disabled={loading} style={{ flex: 2, padding: '12px', background: C.primary, color: C.white, border: 'none', borderRadius: 10, fontWeight: 800, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
+                  {loading ? 'Booking…' : 'Confirm Booking →'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === 'done' && (
+            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+              <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: C.text, marginBottom: 8 }}>Booking Confirmed!</div>
+              <div style={{ fontSize: 14, color: C.gray, marginBottom: 8 }}>
+                <strong>{provider.name}</strong> has been booked for <strong>{date}</strong> at <strong>{slot}</strong>
+              </div>
+              <div style={{ fontSize: 13, color: C.gray, marginBottom: 24 }}>You can view this in your booking history.</div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => close(false)} style={{ flex: 1, padding: '12px', background: C.cream, border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', color: C.gray }}>Close</button>
+                <button onClick={() => { close(true); document.getElementById('customer-section')?.scrollIntoView({ behavior: 'smooth' }); }}
+                  style={{ flex: 2, padding: '12px', background: C.primary, color: C.white, border: 'none', borderRadius: 10, fontWeight: 800, cursor: 'pointer' }}>
+                  View My Bookings →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

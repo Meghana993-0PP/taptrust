@@ -24,9 +24,16 @@ function authHeaders() {
 export default function ProviderDashboard() {
   const user = getUser();
   const [tab, setTab] = useState('overview');
+  const [profile, setProfile] = useState(null);
 
   useEffect(() => {
-    if (!user || user.role !== 'Provider') { window.location.href = '/'; }
+    if (!user || user.role !== 'Provider') { window.location.href = '/'; return; }
+    // Fetch real profile name
+    const token = localStorage.getItem('taptrust_token');
+    if (token) {
+      fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.text()).then(t => { try { const d = JSON.parse(t); if (d?.data) setProfile(d.data); } catch {} }).catch(() => {});
+    }
   }, []);
 
   if (!user) return null;
@@ -52,10 +59,10 @@ export default function ProviderDashboard() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 40, height: 40, borderRadius: '50%', background: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16 }}>
-              {user.name?.[0]?.toUpperCase() || 'P'}
+              {(profile?.name || user?.name || 'P')[0].toUpperCase()}
             </div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{user.name || 'Provider'}</div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{profile?.name || user?.name || 'Provider'}</div>
               <div style={{ fontSize: 11, color: '#8aacbf' }}>Service Provider</div>
             </div>
           </div>
@@ -84,7 +91,7 @@ export default function ProviderDashboard() {
 
       {/* Main */}
       <div style={{ marginLeft: 240, flex: 1, padding: 32 }}>
-        {tab === 'overview' && <Overview user={user} />}
+        {tab === 'overview' && <Overview user={profile || user} />}
         {tab === 'requests' && <Requests />}
         {tab === 'jobs' && <ActiveJobs />}
         {tab === 'earnings' && <Earnings />}
